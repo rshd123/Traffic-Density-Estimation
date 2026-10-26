@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚦 Adaptive Traffic Density Estimation
+# Traffic Density Estimation
 
 **PCU-weighted, lane-independent traffic density for Chennai roads**
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 🎯 Objective
+## Objective
 
 **Measure how loaded a road really is — and where — in mixed Indian traffic.**
 
@@ -38,7 +38,7 @@ On Chennai roads, cars, bikes, autos, buses and trucks all share the same space,
 
 ---
 
-## ⚖️ PCU — giving each vehicle a "size score"
+## PCU — giving each vehicle a "size score"
 
 **PCU (Passenger Car Unit)** compares every vehicle to one car. Think of a toll booth that charges by size: a bike pays half, a bus pays three times.
 
@@ -61,7 +61,7 @@ PCU catches what counting misses.
 
 ---
 
-## 🛣️ Virtual zones — splitting the road without lanes
+##       Virtual zones — splitting the road without lanes
 
 Instead of trusting painted lanes, the system **draws its own invisible strips** across the road. They are narrower at the top of the picture, because far-away road looks smaller:
 
@@ -89,7 +89,7 @@ This gives both **how much** traffic there is (7.75 PCU) and **where** it is con
 
 ---
 
-## 🔄 How it works
+## How it works
 
 ```text
 Traffic image / video
