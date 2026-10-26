@@ -3,13 +3,20 @@
 Subcommands:
     stats   - per-split class/image statistics (also writes data/stats.json)
     verify  - render sampled images with hypothesized class names -> data/verify/
-    build   - stratified subset selection -> data/subset/{train,val,test}/{images,labels}
+    build   - video-level stratified subset -> data/subset/{train,val,test}/{images,labels}
     config  - generate configs/data.yaml from the built subset
 
-Usage (ATDE env):
+build ignores DriveIndia's official split: it scatters frames of one video
+across train/val/test (same road, same vehicles in both -> leakage). Instead
+every drive (front F_ + rear R_ camera together) goes to exactly one split,
+and byte-identical images are dropped.
+
+Usage (tde env):
     python src/data/preprocessor.py stats
     python src/data/preprocessor.py verify --n 40
     python src/data/preprocessor.py build --train 3000 --val 400 --test 700
+    python src/data/preprocessor.py build --group route   # stricter: whole routes per split
+    python src/data/preprocessor.py build --imgsz 0       # keep full-res images (default: 640 px)
     python src/data/preprocessor.py config            # default: id<N> + names for the 5 PCU classes
     python src/data/preprocessor.py config --names ids      # every class as id<N>
     python src/data/preprocessor.py config --names paper    # hypothesized names (reference only)
@@ -18,10 +25,13 @@ Usage (ATDE env):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
+import re
 import shutil
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -137,16 +147,76 @@ def scan(split: str) -> list[dict]:
                         classes.append(int(float(parts[0])))
                     except ValueError:
                         pass
+            # F_11_2_1084 -> video F_11_2, frame 1084 (a few frames are "F1084")
             seq, _, frame = img.stem.rpartition("_")
+            m = re.search(r"\d+$", frame)
             samples.append({
                 "split": split,
                 "img": img,
                 "lbl": lbl,
                 "classes": classes,
                 "seq": seq or img.stem,
-                "frame": int(frame) if frame.isdigit() else 0,
+                "frame": int(m.group()) if m else 0,
             })
     return samples
+
+
+def group_of(seq: str, level: str) -> str:
+    """Leakage unit of a video: F_11_2 -> drive '11_2' (front + rear camera
+    filmed together) or route '11'."""
+    parts = seq.split("_")
+    if parts[0] in ("F", "R"):
+        parts = parts[1:]
+    return parts[0] if level == "route" else "_".join(parts)
+
+
+def assign_groups(pool: list[dict], targets: dict[str, int], level: str,
+                  seed: int, tries: int) -> dict[str, str]:
+    """Map each group to one split.
+
+    Each split's share of images follows its quota. Over `tries` random
+    shuffles, keep the one where every split has enough images (2x quota,
+    headroom for the frame-gap filter), all 5 PCU classes are well
+    represented, and the most class ids appear in all three splits.
+    """
+    groups = defaultdict(list)
+    for s in pool:
+        groups[group_of(s["seq"], level)].append(s)
+    inst = {g: Counter(c for s in ss for c in s["classes"]) for g, ss in groups.items()}
+    total, qsum = len(pool), sum(targets.values())
+    want = {sp: total * q / qsum for sp, q in targets.items()}
+
+    rng = random.Random(seed)
+    keys = sorted(groups)
+    best, best_score = None, None
+    for _ in range(tries):
+        rng.shuffle(keys)
+        assign, size = {}, Counter()
+        i = 0
+        for sp in ("test", "val"):  # smallest splits first, train takes the rest
+            while i < len(keys) and size[sp] < want[sp]:
+                assign[keys[i]] = sp
+                size[sp] += len(groups[keys[i]])
+                i += 1
+        for g in keys[i:]:
+            assign[g] = "train"
+            size["train"] += len(groups[g])
+
+        split_inst = {sp: Counter() for sp in targets}
+        for g, sp in assign.items():
+            split_inst[sp].update(inst[g])
+        feasible = all(size[sp] >= 2 * targets[sp] for sp in targets)
+        pcu_min = min(split_inst[sp][c] for sp in targets for c in PCU)
+        shared = sum(1 for c in set().union(*split_inst.values())
+                     if all(split_inst[sp][c] > 0 for sp in targets))
+        dev = sum(abs(size[sp] - want[sp]) / want[sp] for sp in targets)
+        score = (feasible, min(pcu_min, 50), shared, -dev)
+        if best_score is None or score > best_score:
+            best, best_score = dict(assign), score
+
+    if not best_score[0]:
+        raise SystemExit("could not find a group split with enough images per split - lower the quotas")
+    return best
 
 
 def unlabeled_count(split: str) -> int:
@@ -161,6 +231,26 @@ def unlabeled_count(split: str) -> int:
 
 def name(cid: int) -> str:
     return NAMES.get(cid, f"id{cid}")
+
+
+def copy_image(src: Path, dst: Path, imgsz: int) -> None:
+    """Copy src -> dst, shrinking the longest side to imgsz (0 = plain copy).
+
+    YOLO shrinks every image to its training size each epoch anyway; doing
+    it once here saves that decode/resize work. Never upscales.
+    """
+    if imgsz <= 0:
+        shutil.copy2(src, dst)
+        return
+    from PIL import Image
+
+    with Image.open(src) as im:
+        scale = imgsz / max(im.size)
+        if scale >= 1:
+            shutil.copy2(src, dst)
+            return
+        size = (round(im.width * scale), round(im.height * scale))
+        im.convert("RGB").resize(size, Image.Resampling.LANCZOS).save(dst, quality=95)
 
 
 # ------------------------------------------------------------------- subcommands
@@ -266,14 +356,20 @@ def cmd_verify(args) -> None:
 
 def cmd_build(args) -> None:
     targets = {"train": args.train, "val": args.val, "test": args.test}
-    report = {}
+    report = {"group_level": args.group, "seed": args.seed, "imgsz": args.imgsz}
+
+    # pool every labeled image, then give each drive/route to exactly one split
+    everything = [s for sp in SPLITS for s in scan(sp)]
+    if not everything:
+        raise SystemExit("no labeled samples in datasets/")
+    assign = assign_groups(everything, targets, args.group, args.seed, args.tries)
+    seen_hashes = set()  # byte-identical images are kept only once
 
     for split, quota in targets.items():
-        pool = scan(split)
-        if not pool:
-            raise SystemExit(f"no labeled samples in {split}")
+        pool = [s for s in everything if assign[group_of(s["seq"], args.group)] == split]
         freq = Counter(c for s in pool for c in set(s["classes"]))
         anomaly = sum(1 for s in pool for c in s["classes"] if c >= 24)
+        dupes = 0
 
         # rarest-class-first: key = frequency of the rarest class in the image
         ordered = sorted(pool, key=lambda s: (min(freq[c] for c in set(s["classes"])), s["seq"], s["frame"]))
@@ -292,6 +388,12 @@ def cmd_build(args) -> None:
                 fs = frames_by_seq[s["seq"]]
                 if fs and min(abs(s["frame"] - f) for f in fs) < gap:
                     continue
+                digest = hashlib.md5(s["img"].read_bytes()).hexdigest()
+                if digest in seen_hashes:
+                    accepted_paths.add(s["img"])  # never re-check this file
+                    dupes += 1
+                    continue
+                seen_hashes.add(digest)
                 accepted.append(s)
                 accepted_paths.add(s["img"])
                 fs.append(s["frame"])
@@ -304,17 +406,25 @@ def cmd_build(args) -> None:
             shutil.rmtree(out_root)
         (out_root / "images").mkdir(parents=True)
         (out_root / "labels").mkdir(parents=True)
+        # labels are normalized (0-1), so they stay valid after resizing
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            list(ex.map(lambda s: copy_image(s["img"], out_root / "images" / s["img"].name, args.imgsz),
+                        accepted))
         for s in accepted:
-            shutil.copy2(s["img"], out_root / "images" / s["img"].name)
             shutil.copy2(s["lbl"], out_root / "labels" / s["lbl"].name)
 
         sub_inst = Counter(c for s in accepted for c in s["classes"])
+        split_groups = sorted(g for g, sp in assign.items() if sp == split)
         report[split] = {
             "selected": len(accepted),
             "quota": quota,
+            "pool_images": len(pool),
+            "groups": split_groups,
+            "duplicates_skipped": dupes,
             "instances": dict(sorted(sub_inst.items())),
         }
-        print(f"\n== {split} == {len(accepted)}/{quota} images copied")
+        print(f"\n== {split} == {len(accepted)}/{quota} images copied "
+              f"({len(split_groups)} {args.group}s, pool {len(pool)} imgs, {dupes} duplicates skipped)")
         if anomaly:
             print(f"  note: {anomaly} label instances with class id >= 24 (anomaly) in full pool")
         print(f"  {'id':>3} {'name':<20} {'instances':>9}")
@@ -389,6 +499,14 @@ def main() -> None:
     b.add_argument("--test", type=int, default=700)
     b.add_argument("--gap", type=int, default=10,
                    help="min frame gap within a sequence to avoid near-duplicates (default 10)")
+    b.add_argument("--group", choices=["drive", "route"], default="drive",
+                   help="leakage unit kept inside one split: 'drive' (default, F_+R_ video pair) "
+                        "or 'route' (stricter, all drives of a route)")
+    b.add_argument("--seed", type=int, default=0, help="seed for the group-to-split search")
+    b.add_argument("--tries", type=int, default=500, help="random group splits to score (default 500)")
+    b.add_argument("--imgsz", type=int, default=640,
+                   help="shrink copied images so the longest side is this many px - match the "
+                        "training imgsz (default 640, 0 = keep original 1920x1080)")
 
     c = sub.add_parser("config", help="generate configs/data.yaml from subset")
     c.add_argument("--names", choices=["pcu", "ids", "paper"], default="pcu",

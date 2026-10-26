@@ -3,7 +3,7 @@
 torch / ultralytics are imported inside the functions so the rest of the
 project (preprocessor, pcu) keeps working without the training deps.
 
-Usage (ATDE conda env):
+Usage (tde conda env):
     python src/main.py train
     python src/main.py train --epochs 50 --batch 16 --device 0
 """
@@ -37,6 +37,8 @@ def train(
     batch: int = 16,
     device: int | str = 0,
     patience: int = 15,
+    cache: str = "ram",
+    workers: int = 8,
     project: str | Path = RUNS_DIR,
     name: str = "train",
 ) -> Path:
@@ -63,6 +65,8 @@ def train(
         batch=batch,
         device=device,
         patience=patience,
+        cache=False if cache == "none" else cache,
+        workers=workers,
         project=str(project),
         name=name,
         exist_ok=True,

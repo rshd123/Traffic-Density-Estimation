@@ -41,17 +41,22 @@ DriveIndia ships **no `data.yaml`**, but training, PCU weighting and density all
 
 ### 1.3 Stratified Subset Reduction (`src/data/preprocessor.py`)
 
-Full dataset (30K imgs) is unnecessary for the demo. Agreed targets, kept within the predefined splits:
+Full dataset (30K imgs) is unnecessary for the demo. Agreed targets:
 
-- **train: 2,500–3,000** · **val: 300–500** · **test: 500–1,000**
+- **train: 3,000** · **val: 400** · **test: 700**
+
+**Video-level split (no leakage).** DriveIndia's official split scatters frames of one video across train/val/test — same road, same vehicles on both sides, which inflates test mAP. So `build` pools all labeled images and assigns each **drive** (`F_11_2` + `R_11_2` = front + rear camera of drive 11_2; 107 drives in total) to exactly one split. `--group route` is a stricter option (whole routes, 18 in total).
 
 Selection algorithm:
 
-1. Exclude unlabeled images (train has none; val misses 89, test misses 102).
-2. Cap over-represented classes (car, motorcycle dominate).
-3. Rare-class-first greedy fill: prioritize images containing the rarest class IDs (12, 14, 15, 18, 20–27 …), then fill remaining quota.
-4. Stride sampling within video sequences (take every Nth frame) to avoid near-duplicate frames from the F_/R_ dashcam feeds.
-5. Copy selected files → `data/subset/{train,val,test}/{images,labels}/`.
+1. Exclude unlabeled images (191 in the official val/test).
+2. Assign drives to splits: 500 random shuffles, each split's image share follows its quota; keep the shuffle where every split has ≥ 2× its quota, all 5 PCU classes are well represented, and the most class IDs appear in all three splits (`--seed`, `--tries`).
+3. Rare-class-first greedy fill inside each split: prioritize images containing the rarest class IDs, then fill the remaining quota.
+4. Frame-gap sampling within each video (`--gap 10`) to avoid near-identical consecutive frames.
+5. Skip byte-identical images (DriveIndia ships a few exact copies under different names, e.g. in `F_12_1`).
+6. Copy selected files → `data/subset/{train,val,test}/{images,labels}/`, shrinking images so the longest side is 640 px (`--imgsz 640` default, matches the training size; `--imgsz 0` keeps full-res). Labels are normalized, so they need no change. Subset: 1.6 GB → 317 MB. Groups per split recorded in `data/subset/build_report.json`.
+
+Result (seed 0): train 3,000 imgs / 75 drives · val 400 / 8 drives · test 700 / 19 drives — zero shared drives, zero identical images across splits.
 
 Keep **all 24 classes** (class count barely affects training time). No class remapping — PCU lookup filters to the 5 target classes at inference.
 
@@ -88,15 +93,15 @@ names:
 
 ### 2.1 Detector (`src/models/detector.py`, entry: `src/main.py`)
 
-- **Environment: conda env `ATDE`** (Miniconda) — no `.venv` anywhere. Setup once:
+- **Environment: conda env `tde`** (Miniconda) — no `.venv` anywhere. Setup once:
   ```powershell
-  conda activate ATDE
+  conda activate tde
   python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130   # RTX 5060 = Blackwell, needs CUDA 13.0 wheels
   python -m pip install -r requirements.txt
   ```
 - Model: `yolo26n` (nano), transfer learning from pretrained `weights/yolo26n.pt`
 - Data: `configs/data.yaml` → `data/subset/`
-- Run: `python src/main.py train` (options: `--epochs --imgsz --batch --device --patience`)
+- Run: `python src/main.py train` (options: `--epochs --imgsz --batch --device --patience --cache --workers`)
 - Hyperparameters (demo baseline):
 
 | Param | Value |
@@ -104,7 +109,9 @@ names:
 | epochs | 50 (early stop, patience 15) |
 | imgsz | 640 |
 | batch | 16 |
-| device | 0 (RTX 5060, 8 GB) |
+| device | 0 (RTX 5060 Laptop, 8 GB) |
+| cache | ram (decoded images kept in memory, ~2–3 GB) |
+| workers | 8 |
 
 - Expected time: ~5–15 min on 2.5–3K train imgs (vs ~1–2 hrs on full 30K)
 - Ultralytics built-in augmentation (mosaic, hsv, flip) is sufficient — no custom augmentor
@@ -222,6 +229,6 @@ PCU target classes (post-verification): car 1.0 · motorcycle 0.5 · auto-ricksh
 ## Data Notes
 
 - DriveIndia claims 66,986 imgs / 24 classes in the paper; delivered zip has 30,000 (partial release)
-- Splits: train 8,333 + 8,333 + 8,334 = 25,000 · val 2,500 (2,411 labeled) · test 2,500 (2,398 labeled)
+- Official splits: train 8,333 + 8,333 + 8,334 = 25,000 · val 2,500 (2,411 labeled) · test 2,500 (2,398 labeled) — frame-level, so the subset re-splits by drive (§1.3)
 - Prefixes: `F_` = front camera, `R_` = rear camera
 - Val class frequencies: 0:3594, 1:38, 2:3748, 3:3153, 4:89, 5:335, 6:443, 7:505, 8:313, 9:69, 10:956, 12:5, 14:21, 15:7, 18:3, 20:16, 21:5, 22:5, 23:70, 24:77, 25:8, 26:7, 27:3

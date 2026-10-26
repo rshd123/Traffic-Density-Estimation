@@ -1,6 +1,6 @@
 """Adaptive Traffic Density Estimation - CLI entry.
 
-Usage (ATDE conda env):
+Usage (tde conda env):
     python src/main.py train
     python src/main.py train --epochs 50 --batch 16 --device 0
 """
@@ -30,6 +30,8 @@ def cmd_train(args) -> None:
         batch=args.batch,
         device=_device(args.device),
         patience=args.patience,
+        cache=args.cache,
+        workers=args.workers,
     )
 
 
@@ -46,9 +48,12 @@ def main() -> None:
                    help="base weights, looked up in weights/ first (default yolo26n.pt)")
     t.add_argument("--epochs", type=int, default=50)
     t.add_argument("--imgsz", type=int, default=640)
-    t.add_argument("--batch", type=int, default=16)
+    t.add_argument("--batch", type=int, default=16, help="images per step; -1 = largest that fits the GPU")
     t.add_argument("--device", default="0", help="cuda device id / 'cpu' (default 0)")
     t.add_argument("--patience", type=int, default=15, help="early-stop patience (default 15)")
+    t.add_argument("--cache", choices=["ram", "disk", "none"], default="ram",
+                   help="keep decoded images in RAM (default, ~2-3 GB) / on disk / off")
+    t.add_argument("--workers", type=int, default=8, help="dataloader worker processes (default 8)")
     t.set_defaults(func=cmd_train)
 
     args = ap.parse_args()

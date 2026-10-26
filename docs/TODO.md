@@ -7,7 +7,8 @@ Remaining work for the project, based on **docs/CONTEXT.md** (the research goal)
 ## Done so far (quick status)
 
 - Data subset built: 3,000 train / 400 val / 700 test images, config generated (`nc: 28`)
-- Environment ready: conda env `ATDE`, torch with CUDA 13.0, ultralytics, GPU verified (RTX 5060)
+- Split is **video-level**: each drive sits in exactly one split, exact duplicate images removed (no train/test leakage)
+- Environment ready: conda env `tde`, torch with CUDA 13.0, ultralytics, GPU verified (RTX 5060)
 - PCU weights defined (car 1.0 · motorcycle 0.5 · auto-rickshaw 0.75 · bus 3.0 · truck 3.5) with ID-based lookup
 - Training entry point written (CLI ready to run)
 - Pretrained base weights downloaded
