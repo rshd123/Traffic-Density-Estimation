@@ -190,11 +190,20 @@ PCU applies only to these 5 classes; other detections are ignored at density tim
 
 ### 5.1 Entry (`src/main.py`)
 
-- Image / video inference → annotated output + zone-wise density JSON
+- `predict`: image(s) → annotated output + lane-wise density JSON (`outputs/predict/`)
+- `serve`: start the web API (+ the built React app)
+- Video inference: not done yet
 
-### 5.2 Demo app (`src/app.py`)
+### 5.2 Web API (`src/api/server.py`) - routes in `docs/ENDPOINTS.md`
 
-- Simple interactive demo (upload image/video → density result)
+- FastAPI, model loaded once at startup; `POST /api/analyze` = photo in → density JSON + annotated image out
+- Actual vs predicted (`src/evaluation/compare.py`): correct answers from an uploaded YOLO label file, or found automatically by file name in `data/subset/`; run through the same PCU + lane maths, plus one-to-one box matching (IoU ≥ 0.5 → correct / wrong type / missed / extra)
+
+### 5.3 React app (`frontend/`, Vite)
+
+- Upload (drag & drop) → result photo (predicted / actual toggle), stat tiles, per-lane + per-vehicle tables, actual vs predicted section
+- Settings: lanes 3/5/7, confidence, horizon height
+- Dev: `npm run dev` (proxies `/api` to port 8000); prod: `npm run build` → served by the Python server at `/`
 
 ---
 

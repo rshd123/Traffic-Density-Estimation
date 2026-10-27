@@ -59,7 +59,7 @@ def draw(image: np.ndarray, result: dict, layout: ZoneLayout) -> np.ndarray:
 
     # zone labels
     for z, (lx, ly) in zip(result["zones"], layout.label_points()):
-        _text(out, f"Z{z['zone'] + 1}: {z['pcu']:g} PCU", (lx - 40 * scale, ly), scale * 0.6,
+        _text(out, f"L{z['zone'] + 1}: {z['pcu']:g} PCU", (lx - 40 * scale, ly), scale * 0.6,
               (255, 255, 255), max(thick - 1, 1))
 
     o = result["overall"]

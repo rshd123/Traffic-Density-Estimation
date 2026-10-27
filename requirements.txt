@@ -8,6 +8,11 @@ ultralytics>=8.3.0
 opencv-python>=4.9.0
 matplotlib>=3.8.0
 
+# Web API (python src/main.py serve)
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+
 # torch/torchvision are installed FIRST and separately - RTX 5060 (Blackwell)
 # needs the CUDA 13.0 wheels, otherwise training would silently fall back to CPU:
 #   conda activate tde

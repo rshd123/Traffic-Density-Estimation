@@ -7,3 +7,5 @@
 __pycache__/
 *.pyc
 /outputs
+/frontend/node_modules
+/frontend/dist

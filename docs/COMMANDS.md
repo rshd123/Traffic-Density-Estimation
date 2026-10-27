@@ -40,6 +40,36 @@ python src/main.py predict photo.jpg --horizon 0.5         # horizon at half hei
 python src/main.py predict photo.jpg --conf 0.4            # only keep detections the model is >= 40% sure of
 ```
 
+## Web app (upload a photo -> density)
+
+First time only - install the frontend packages (needs Node.js):
+
+```powershell
+cd frontend; npm install; cd ..
+```
+
+**Option A - one window (simplest):** build the React app once, the Python server then serves it.
+
+```powershell
+cd frontend; npm run build; cd ..     # rebuild after changing frontend code
+python src/main.py serve              # open http://127.0.0.1:8000
+```
+
+**Option B - while editing the frontend:** one command starts both servers, the page reloads on every save.
+
+```powershell
+python src/main.py dev                # backend (8000) + frontend (5173) -> open http://localhost:5173, Ctrl+C stops both
+```
+
+Same thing in two separate terminals, if you prefer:
+
+```powershell
+python src/main.py serve --reload     # terminal 1: API on port 8000
+cd frontend; npm run dev              # terminal 2: open http://localhost:5173
+```
+
+API routes: see **docs/ENDPOINTS.md**. Try them in the browser at http://127.0.0.1:8000/docs.
+
 ## Class-check helpers
 
 ```powershell

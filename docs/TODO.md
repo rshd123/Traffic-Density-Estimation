@@ -32,7 +32,8 @@ Remaining work for the project, based on **docs/CONTEXT.md** (the research goal)
 ## 3. Evaluation  (prove it actually works)
 
 - [x] Detection accuracy (mAP) on the test split — all-class mAP50 0.587 (see section 1 for the PCU classes)
-- [ ] Density error compared to ground truth
+- [x] Density error vs ground truth for **one photo** (web app / `evaluation/compare.py`: PCU error %, per lane, matched / missed / extra boxes)
+- [ ] Density error vs ground truth over the **whole test split** (700 photos) → numbers for the paper
 - [ ] **Baseline 1:** plain vehicle counting vs PCU-weighted density — this is the project's main comparison (from CONTEXT.md)
 - [ ] **Baseline 2:** fixed lane-based zones vs virtual spatial zones
 - [ ] Zone assignment accuracy
@@ -44,7 +45,9 @@ Remaining work for the project, based on **docs/CONTEXT.md** (the research goal)
 - [ ] Comparison plots: PCU density vs raw count
 - [x] Image inference that outputs an annotated result + density numbers (`predict`)
 - [ ] Video inference
-- [ ] Simple demo app: upload an image/video → get the density result
+- [x] Web API (FastAPI): `python src/main.py serve`, routes in `docs/ENDPOINTS.md`
+- [x] React app (`frontend/`): upload a photo → annotated result, lane + vehicle tables, actual vs predicted when correct answers exist
+- [ ] Demo app: video upload
 
 ## 5. Research validation  (the risk flagged in CONTEXT.md)
 

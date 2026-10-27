@@ -5,6 +5,8 @@ Usage (tde conda env):
     python src/main.py train --epochs 50 --batch 16 --device 0
     python src/main.py predict photo.jpg
     python src/main.py predict data/subset/test/images --zones 3
+    python src/main.py serve
+    python src/main.py dev        # backend + React dev server together
 """
 
 from __future__ import annotations
@@ -81,10 +83,57 @@ def cmd_predict(args) -> None:
         (out_dir / f"{f.stem}_density.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
 
         o = result["overall"]
-        zones = "  ".join(f"Z{z['zone'] + 1}={z['pcu']:g}" for z in result["zones"])
+        zones = "  ".join(f"L{z['zone'] + 1}={z['pcu']:g}" for z in result["zones"])
         print(f"{f.name}: {o['vehicles']} vehicles, {o['pcu']:g} PCU, density {o['density']:g}"
-              f" | zone PCU {zones}")
+              f" | lane PCU {zones}")
     print(f"results -> {out_dir}")
+
+
+def cmd_serve(args) -> None:
+    import uvicorn
+
+    src = str(ROOT / "src")
+    uvicorn.run("api.server:app", app_dir=src, host=args.host, port=args.port,
+                reload=args.reload, reload_dirs=[src] if args.reload else None)
+
+
+def _stop(proc) -> None:
+    import os
+    import subprocess
+
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":  # npm/uvicorn start child processes - kill the whole tree
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+    else:
+        proc.terminate()
+
+
+def cmd_dev(_args) -> None:
+    import os
+    import subprocess
+    import time
+
+    frontend = ROOT / "frontend"
+    if not (frontend / "node_modules").is_dir():
+        raise SystemExit("frontend packages missing - run once: cd frontend; npm install")
+
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    procs = [
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve", "--reload"]),
+        subprocess.Popen([npm, "run", "dev"], cwd=frontend),
+    ]
+    print("\nbackend  -> http://127.0.0.1:8000"
+          "\nfrontend -> http://localhost:5173   <- open this"
+          "\nCtrl+C stops both\n", flush=True)
+    try:
+        while all(p.poll() is None for p in procs):  # stop everything if one side dies
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for p in procs:
+            _stop(p)
 
 
 def main() -> None:
@@ -122,6 +171,15 @@ def main() -> None:
                    help="vanishing point x as a fraction of image width (default configs/lanes.yaml)")
     p.add_argument("--out", default=ROOT / "outputs" / "predict", help="output folder (default outputs/predict)")
     p.set_defaults(func=cmd_predict)
+
+    s = sub.add_parser("serve", help="start the web API (+ React app if frontend/dist is built)")
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=8000)
+    s.add_argument("--reload", action="store_true", help="restart automatically when code changes")
+    s.set_defaults(func=cmd_serve)
+
+    d = sub.add_parser("dev", help="backend (port 8000) + React dev server (port 5173) together")
+    d.set_defaults(func=cmd_dev)
 
     args = ap.parse_args()
     args.func(args)
