@@ -15,11 +15,11 @@ Remaining work for the project, based on **docs/CONTEXT.md** (the research goal)
 
 ---
 
-## 1. Train the detector  (ready to run now)
+## 1. Train the detector  (done)
 
-- [ ] Run training: `python src/main.py train` (yolo26n, 50 epochs, batch 16, imgsz 640, GPU; early stop patience 15)
-- [ ] Check quality: mAP on val for the 5 PCU classes should be good; rare classes may be weak — acceptable for the demo
-- [ ] Confirm the best checkpoint is saved for later use
+- [x] Run training: `python src/main.py train` (yolo26n, batch 16, imgsz 640, GPU) — early-stopped at epoch 45, best epoch 30, ~20 min
+- [x] Check quality: test mAP50 — car 0.94 · motorcycle 0.94 · auto-rickshaw 0.77 · bus 0.73 · truck 0.56 (weakest)
+- [x] Confirm the best checkpoint is saved for later use → `weights/yolo26n_best.pt`
 
 ## 2. PCU-weighted density  (core of the project)
 
@@ -29,7 +29,7 @@ Remaining work for the project, based on **docs/CONTEXT.md** (the research goal)
 
 ## 3. Evaluation  (prove it actually works)
 
-- [ ] Detection accuracy (mAP) on the test split
+- [x] Detection accuracy (mAP) on the test split — all-class mAP50 0.587 (see section 1 for the PCU classes)
 - [ ] Density error compared to ground truth
 - [ ] **Baseline 1:** plain vehicle counting vs PCU-weighted density — this is the project's main comparison (from CONTEXT.md)
 - [ ] **Baseline 2:** fixed lane-based zones vs virtual spatial zones
