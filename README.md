@@ -103,3 +103,17 @@ Virtual zones — place each vehicle in a strip
 Zone-wise PCU density  →  where the road is crowded
 Overall PCU density    →  how crowded the road is
 ```
+
+---
+
+## Example output
+
+Uploading a test photo in the web app (`python src/main.py dev`):
+
+**1. Result photo:** white lines are the virtual lanes (L1 = far left), fanning out from where the road disappears. The red tint shows PCU density: the stronger the red, the busier the lane.
+
+![Result photo with virtual lanes and PCU density](docs/images/output1.png)
+
+**2. Numbers and accuracy check:** totals, density per lane, a breakdown by vehicle type, and the model's answer compared with the dataset's correct answers.
+
+![Density per lane, vehicle types and actual vs predicted](docs/images/output2.png)
