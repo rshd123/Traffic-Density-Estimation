@@ -1,4 +1,4 @@
-"""YOLO detector - training entry for the DriveIndia subset.
+"""YOLO detector - training and inference for the DriveIndia subset.
 
 torch / ultralytics are imported inside the functions so the rest of the
 project (preprocessor, pcu) keeps working without the training deps.
@@ -27,6 +27,27 @@ def resolve_model(model: str = "yolo26n.pt") -> str:
     if p.is_file() and p.stat().st_size > 0:
         return str(p)
     return model
+
+
+def load(weights: str = "yolo26n_best.pt"):
+    """Load detector weights (looked up in weights/ first)."""
+    from ultralytics import YOLO
+
+    return YOLO(resolve_model(weights))
+
+
+def detect(model, image, conf: float = 0.25, imgsz: int = 640,
+           device: int | str | None = None) -> list[dict]:
+    """Run the detector on one image (path or BGR array).
+
+    Returns one dict per box: class_id, conf, box [x1, y1, x2, y2] in pixels.
+    """
+    r = model.predict(image, conf=conf, imgsz=imgsz, device=device, verbose=False)[0]
+    b = r.boxes
+    return [
+        {"class_id": int(c), "conf": round(float(s), 3), "box": [round(float(v), 1) for v in xyxy]}
+        for c, s, xyxy in zip(b.cls.tolist(), b.conf.tolist(), b.xyxy.tolist())
+    ]
 
 
 def train(

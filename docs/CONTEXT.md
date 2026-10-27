@@ -1,4 +1,4 @@
-# Adaptive Traffic Density Estimation for Chennai Roads
+# Traffic Density Estimation for Chennai Roads
 
 ## What Problem Does It Solve in Chennai Traffic?
 

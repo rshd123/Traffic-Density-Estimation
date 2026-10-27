@@ -1,4 +1,4 @@
-path: C:/Users/arsha/Desktop/Adaptive Traffic Density Estimation/data/subset
+path: C:/Users/arsha/Desktop/Traffic Density Estimation/data/subset
 train: train/images
 val: val/images
 test: test/images

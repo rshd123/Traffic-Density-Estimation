@@ -23,8 +23,10 @@ Remaining work for the project, based on **docs/CONTEXT.md** (the research goal)
 
 ## 2. PCU-weighted density  (core of the project)
 
-- [ ] **Virtual spatial zones** — split the road into width-wise strips (3/5/7, configurable), wider at the bottom to handle perspective; put each detected vehicle into a zone by its bounding-box center
-- [ ] **Density estimation** — zone density = sum of PCU weights in that zone ÷ zone area; overall density = all PCU ÷ road area; smooth over time for video
+- [x] **Virtual spatial zones** — `src/density/lane_calculation.py`: equal-angle strips fanning out from the vanishing point (3/5/7, configurable), thin far away and wide near the camera; each vehicle goes into a zone by its ground point (bottom-centre of the box)
+- [x] **Density estimation** — `src/density/estimator.py`: zone density = PCU in zone ÷ zone area; overall density = all PCU ÷ road area; plain-count density reported alongside. Run: `python src/main.py predict <image>`
+- [ ] Density: smooth over time for video
+- [ ] Density: convert areas to real road size (m²) with perspective calibration
 - [ ] **Occlusion correction** — make up for vehicles hidden behind each other in crowded zones (under-counting)
 
 ## 3. Evaluation  (prove it actually works)
@@ -37,10 +39,11 @@ Remaining work for the project, based on **docs/CONTEXT.md** (the research goal)
 
 ## 4. Visualization & demo
 
-- [ ] Show detections with their PCU values
-- [ ] Zone-wise density heatmap drawn over the road image
+- [x] Show detections with their PCU values
+- [x] Zone-wise density heatmap drawn over the road image (red tint, stronger = denser)
 - [ ] Comparison plots: PCU density vs raw count
-- [ ] Image/video inference that outputs an annotated result + density numbers
+- [x] Image inference that outputs an annotated result + density numbers (`predict`)
+- [ ] Video inference
 - [ ] Simple demo app: upload an image/video → get the density result
 
 ## 5. Research validation  (the risk flagged in CONTEXT.md)

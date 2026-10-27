@@ -1,0 +1,11 @@
+# Lane calculation (virtual spatial zones) - lane-free strips that fan out from the vanishing
+# point (where the road disappears on the horizon). Each strip is thin far
+# away and wide near the camera, like real lanes in a photo.
+#
+# Defaults fit the DriveIndia dashcam view (front + rear camera): vehicles
+# touch the road from ~42% of the image height downwards (test-split labels).
+# Photos from another camera may need a different horizon_y.
+
+num_zones: 5        # strips from left to right (3 / 5 / 7)
+horizon_y: 0.42     # height of the horizon, as a fraction of image height (0 = top)
+vanishing_x: 0.5    # where the road disappears, as a fraction of image width (0.5 = centre)

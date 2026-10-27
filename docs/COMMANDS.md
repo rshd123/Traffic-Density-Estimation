@@ -30,6 +30,16 @@ python src/main.py train --epochs 1         # quick 1-epoch test
 python src/main.py train --batch -1         # train with auto batch size (usually faster)
 ```
 
+## Density (image -> PCU density)
+
+```powershell
+python src/main.py predict photo.jpg                       # annotated image + density JSON -> outputs/predict/
+python src/main.py predict data/subset/test/images         # every image in a folder
+python src/main.py predict photo.jpg --zones 3             # 3 zones instead of 5
+python src/main.py predict photo.jpg --horizon 0.5         # horizon at half height (photos from another camera)
+python src/main.py predict photo.jpg --conf 0.4            # only keep detections the model is >= 40% sure of
+```
+
 ## Class-check helpers
 
 ```powershell

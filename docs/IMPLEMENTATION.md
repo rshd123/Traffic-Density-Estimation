@@ -91,7 +91,7 @@ names:
 
 ## Phase 2: Model Training
 
-### 2.1 Detector (`src/models/detector.py`, entry: `src/main.py`)
+### 2.1 Detector (`src/detection/detector.py`, entry: `src/main.py`)
 
 - **Environment: conda env `tde`** (Miniconda) — no `.venv` anywhere. Setup once:
   ```powershell
@@ -125,7 +125,7 @@ Driven by CLI args / YAML in `configs/` — no separate trainer module.
 
 ## Phase 3: PCU-Weighted Density Estimation
 
-### 3.1 PCU Weight Definitions (`src/models/pcu.py`, `configs/pcu_weights.yaml`)
+### 3.1 PCU Weight Definitions (`src/density/pcu.py`, `configs/pcu_weights.yaml`)
 
 IRC-based PCU values (configurable for sensitivity analysis):
 
@@ -139,18 +139,25 @@ IRC-based PCU values (configurable for sensitivity analysis):
 
 PCU applies only to these 5 classes; other detections are ignored at density time.
 
-### 3.2 Virtual Spatial Zones (`src/density/zones.py`)
+### 3.2 Virtual Spatial Zones / lane calculation (`src/density/lane_calculation.py`, `configs/lanes.yaml`)
 
-- Divide road image into N width-wise vertical strips/zones (configurable: 3, 5, 7)
-- Perspective handling: zones wider at bottom, narrower at top
-- Assign each detected vehicle to its zone by bounding-box center
+- Road = everything below the horizon (`horizon_y: 0.42`, from where vehicles touch the road in the test labels)
+- Split into N **equal-angle wedges** fanning out from the vanishing point (`num_zones: 5`, configurable 3/5/7) → thin far away, wide near the camera, like real lanes in a photo
+- Equal angle (not equal bottom width) because DriveIndia roads are wide: a lane-width fan covered only 49–77% of the labelled vehicles; the angle fan covers 100% of the road below the horizon
+- Each vehicle is assigned by its **ground point** = bottom-centre of the box (where the wheels touch the road), not the box centre
+- Vehicles above the horizon → zone `None` (`off_road`), left out of density
+- Horizon / vanishing point can be overridden per image (`--horizon`, `--vanish-x`) for other cameras
 
 ### 3.3 Density Estimation (`src/density/estimator.py`)
 
-- Per-vehicle PCU weight = `PCU[class]`
+- Per-vehicle PCU weight = `PCU[class]` (`src/density/pcu.py`)
 - Zone PCU density = sum(PCU in zone) / zone area
-- Overall PCU density = sum(all PCU) / total road area
-- Temporal smoothing for video sequences
+- Overall PCU density = sum(all PCU on road) / road area
+- Areas are shares of the image (whole image = 1) → resolution-independent; real-world units (m²) come with perspective calibration later
+- `count_density` (plain vehicle count / area) reported next to PCU density for baseline 1
+- Output JSON: `overall` (vehicles, pcu, density, busiest_zone), `by_class`, `zones`, `vehicles`, `zones_layout`
+- One call for CLI + future web API: `src/pipeline.py` → `analyze(model, image)` returns (result, annotated image)
+- Temporal smoothing for video sequences (not done yet)
 
 ### 3.4 Occlusion Correction (`src/occlusion.py`)
 
@@ -197,6 +204,7 @@ PCU applies only to these 5 classes; other detections are ignored at density tim
 |---|---|
 | `configs/data.yaml` | Dataset paths, class names, splits (generated in 1.4) |
 | `configs/pcu_weights.yaml` | PCU values per vehicle class |
+| `configs/lanes.yaml` | Lane (zone) settings: number of lanes, horizon height, vanishing point |
 
 ---
 
